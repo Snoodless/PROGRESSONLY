@@ -99,7 +99,7 @@ theme();
 if(tg&&tg.onEvent){try{tg.onEvent("themeChanged",theme)}catch(e){}}
 
 var $=function(i){return document.getElementById(i)};
-var data=[],keys=[],pending=0,dur=0,base="",stT=null;
+var data=[],keys=[],pending=0,dur=0,base="",stT=null,rev=0,lastLoad=0,latest={};
 function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function today(){return ymd(new Date())}
 function cutoff(){var d=new Date();d.setDate(d.getDate()-KEEP);return ymd(d)}
@@ -122,13 +122,21 @@ if(JSON.stringify(cur).length>CHUNK&&cur.length>1){cur.pop();ch.push(cur);cur=[i
 if(cur.length)ch.push(cur);
 return ch.map(function(c){return JSON.stringify(c)})}
 
+function put(k,v,t){
+latest[k]=v;pending++;
+cs.setItem(k,v,function(err,ok){
+pending--;
+if(err||ok===false){
+if(t<2){setTimeout(function(){put(k,latest[k],t+1)},800)}else{st("Ошибка сохранения, попробуй ещё раз")}
+}else if(pending===0){st("Сохранено ✓")}})}
+
 function saveDay(date){
+rev++;
 if(!cs){try{localStorage.setItem(LS,JSON.stringify(data))}catch(e){}return}
 var vals=pack(date),want={},pre="d_"+date+"_";
 vals.forEach(function(v,i){want[pre+i]=v});
 Object.keys(want).forEach(function(k){
-pending++;
-cs.setItem(k,want[k],function(err){pending--;if(err)st("Ошибка сохранения, попробуй ещё раз")});
+put(k,want[k],0);
 if(keys.indexOf(k)<0)keys.push(k)});
 var rm=keys.filter(function(k){return k.indexOf(pre)===0&&!(k in want)});
 if(rm.length){
@@ -139,6 +147,7 @@ function loadLocal(){
 try{var a=JSON.parse(localStorage.getItem(LS)||"[]");data=Array.isArray(a)?a:[]}catch(e){data=[]}}
 
 function loadCloud(done){
+var r0=rev;
 cs.getKeys(function(err,ks){
 if(err||!ks){st("Не удалось загрузить записи");done();return}
 ks=ks.filter(function(k){return /^d_\d{4}-\d{2}-\d{2}_\d+$/.test(k)});
@@ -147,7 +156,7 @@ if(old.length){ks=ks.filter(function(k){return old.indexOf(k)<0});cs.removeItems
 keys=ks.slice();
 var out=[],i=0;
 (function next(){
-if(i>=ks.length){data=out;done();return}
+if(i>=ks.length){if(rev===r0&&pending===0){data=out}lastLoad=Date.now();done();return}
 var part=ks.slice(i,i+50);i+=50;
 cs.getItems(part,function(e2,vals){
 if(!e2&&vals){part.forEach(function(k){
@@ -282,7 +291,7 @@ function start(){
 if(cs){loadCloud(render)}else{loadLocal();render()}}
 start();
 document.addEventListener("visibilitychange",function(){
-if(cs&&!document.hidden&&pending===0){loadCloud(render)}});
+if(cs&&!document.hidden&&pending===0&&Date.now()-lastLoad>30000){loadCloud(render)}});
 })();
 </script>
 </body>
