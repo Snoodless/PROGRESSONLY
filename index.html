@@ -202,7 +202,15 @@ m.onclick=function(){editId=e.id;render()};
 var p=document.createElement("button");p.className="edb";p.textContent="✎";p.setAttribute("aria-label","Изменить");
 p.onclick=function(){editId=e.id;render()};
 var x=document.createElement("button");x.textContent="✕";x.setAttribute("aria-label","Удалить");
-x.onclick=function(){if(editId===e.id)editId=null;data=data.filter(function(z){return z.id!==e.id});saveDay(e.date);render()};
+var xt=null;
+x.onclick=function(){
+if(!xt){
+x.textContent="Удалить?";x.style.fontSize="14px";x.style.fontWeight="600";
+xt=setTimeout(function(){xt=null;x.textContent="✕";x.style.fontSize="";x.style.fontWeight=""},3000);
+return}
+clearTimeout(xt);xt=null;
+if(editId===e.id)editId=null;
+data=data.filter(function(z){return z.id!==e.id});saveDay(e.date);render()};
 r.appendChild(m);r.appendChild(p);r.appendChild(x);l.appendChild(r)});
 if(!items.length){l.innerHTML='<div class="mut">Записей за этот день нет</div>'}
 $("tot").textContent=items.length?items.length+" обр. · "+fmt(sum):"";
