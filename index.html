@@ -29,9 +29,13 @@ textarea{resize:vertical}
 .item .w{font-weight:600}
 .item .s{color:var(--mut);font-size:14px}
 .item button{border:0;background:none;color:var(--dn);font-size:18px;padding:4px 8px}
-.rowb{display:flex;gap:8px}
-.mic{width:52px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:12px;font-size:20px}
-.mic.on{background:var(--dn);color:#fff}
+.item button.edb{color:var(--mut);font-size:16px}
+.edform{padding:10px 0;border-top:1px solid var(--bd)}
+.eb{display:flex;gap:8px}
+.eb .btn{margin:0}
+.timer{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.timer .t{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;flex:1}
+.timer .btn{width:auto;padding:10px 16px;margin:0}
 .tot{font-weight:600}
 .mut{color:var(--mut);font-size:14px}
 </style>
@@ -41,12 +45,7 @@ textarea{resize:vertical}
 <h1>Трудозатраты</h1>
 
 <div class="card">
-<textarea id="q" rows="2" placeholder="Быстрая запись: «Иванов сброс пароля 10 минут». Диктуй кнопкой микрофона на клавиатуре."></textarea>
-<div class="rowb"><button class="btn" id="qadd">Записать</button><button class="mic" id="mic" hidden aria-label="Голосовой ввод">🎤</button></div>
-<div class="mut" id="qmsg" style="margin-top:6px"></div>
-</div>
-
-<div class="card">
+<div class="timer"><span class="t" id="tt">⏱ 0:00</span><button class="btn sec" id="trs" hidden>Сброс</button><button class="btn" id="tgo">Старт</button></div>
 <input id="who" list="whos" maxlength="80" placeholder="Кто обратился" autocomplete="off">
 <datalist id="whos"></datalist>
 <textarea id="what" rows="2" maxlength="500" placeholder="Что сделал (например, сброс пароля)"></textarea>
@@ -99,7 +98,7 @@ theme();
 if(tg&&tg.onEvent){try{tg.onEvent("themeChanged",theme)}catch(e){}}
 
 var $=function(i){return document.getElementById(i)};
-var data=[],keys=[],pending=0,dur=0,base="",stT=null,rev=0,lastLoad=0,latest={};
+var data=[],keys=[],pending=0,dur=0,base="",stT=null,rev=0,lastLoad=0,latest={},editId=null,tstart=0,tick=null;
 function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function today(){return ymd(new Date())}
 function cutoff(){var d=new Date();d.setDate(d.getDate()-KEEP);return ymd(d)}
@@ -173,18 +172,38 @@ $("min").oninput=function(){dur=0;mark()};
 function fmt(m){var h=Math.floor(m/60),r=m%60;return h?h+" ч "+(r?r+" мин":""):r+" мин"}
 function dayItems(){var d=$("date").value;return data.filter(function(e){return e.date===d})}
 
+function editForm(e){
+var f=document.createElement("div");f.className="edform";
+var a=document.createElement("input");a.value=e.who;a.maxLength=80;a.placeholder="Кто обратился";a.setAttribute("list","whos");a.autocomplete="off";
+var b=document.createElement("textarea");b.rows=2;b.maxLength=500;b.value=e.what;b.placeholder="Что сделал";
+var c=document.createElement("input");c.type="number";c.setAttribute("inputmode","numeric");c.min=1;c.max=999;c.value=e.min;c.placeholder="Минуты";
+var row=document.createElement("div");row.className="eb";
+var ok=document.createElement("button");ok.className="btn";ok.textContent="Сохранить";
+var no=document.createElement("button");no.className="btn sec";no.textContent="Отмена";
+ok.onclick=function(){
+var m=parseInt(c.value,10);
+if(!m||m<1){c.focus();return}
+e.who=a.value.trim();e.what=b.value.trim();e.min=m;editId=null;saveDay(e.date);render()};
+no.onclick=function(){editId=null;render()};
+row.appendChild(ok);row.appendChild(no);
+f.appendChild(a);f.appendChild(b);f.appendChild(c);f.appendChild(row);return f}
+
 function render(){
 var items=dayItems(),sum=0,l=$("list");l.innerHTML="";
 items.forEach(function(e){
 sum+=e.min;
+if(e.id===editId){l.appendChild(editForm(e));return}
 var r=document.createElement("div");r.className="item";
 var m=document.createElement("div");m.className="m";
 var w=document.createElement("div");w.className="w";w.textContent=e.who||"Без имени";
 var s=document.createElement("div");s.className="s";s.textContent=e.time+" · "+e.min+" мин"+(e.what?" · "+e.what:"");
 m.appendChild(w);m.appendChild(s);
+m.onclick=function(){editId=e.id;render()};
+var p=document.createElement("button");p.className="edb";p.textContent="✎";p.setAttribute("aria-label","Изменить");
+p.onclick=function(){editId=e.id;render()};
 var x=document.createElement("button");x.textContent="✕";x.setAttribute("aria-label","Удалить");
-x.onclick=function(){data=data.filter(function(z){return z.id!==e.id});saveDay(e.date);render()};
-r.appendChild(m);r.appendChild(x);l.appendChild(r)});
+x.onclick=function(){if(editId===e.id)editId=null;data=data.filter(function(z){return z.id!==e.id});saveDay(e.date);render()};
+r.appendChild(m);r.appendChild(p);r.appendChild(x);l.appendChild(r)});
 if(!items.length){l.innerHTML='<div class="mut">Записей за этот день нет</div>'}
 $("tot").textContent=items.length?items.length+" обр. · "+fmt(sum):"";
 $("out").value=items.map(function(e,i){return (i+1)+". "+(e.who||"—")+" — "+(e.what||"обращение")+" — "+e.min+" мин"}).join("\n")+(items.length?"\n\nИтого: "+fmt(sum):"");
@@ -235,60 +254,36 @@ Object.keys(dates).forEach(saveDay);
 render();$("bk").value="";msg("Добавлено записей: "+added)
 }catch(e){msg("Не удалось прочитать текст")}};
 
-/* ---------- быстрая запись одной фразой ---------- */
-var W={"пять":5,"десять":10,"пятнадцать":15,"двадцать":20,"тридцать":30,"сорок":40,"пятьдесят":50,"шестьдесят":60};
-function lw(s){return String(s||"").toLowerCase().replace(/[.,;!?]+$/,"")}
-function numAt(tk,i){
-var w=lw(tk[i]);
-if(/^\d+$/.test(w))return [+w,1];
-if(W.hasOwnProperty(w)){var v=W[w];if(v>=20&&v<=50&&lw(tk[i+1])==="пять")return [v+5,2];return [v,1]}
-return null}
-function parseQ(s){
-var tk=s.replace(/[;!?]/g," ").split(/\s+/).filter(Boolean),mins=0,used={},i,n,u,m2;
-for(i=0;i<tk.length;i++){
-if(lw(tk[i])==="полчаса"){mins=30;used[i]=1;break}
-n=numAt(tk,i);
-if(n&&tk[i+n[1]]){
-u=lw(tk[i+n[1]]);
-if(u.indexOf("мин")===0){mins=n[0];for(var a=0;a<=n[1];a++)used[i+a]=1;break}
-if(u.indexOf("час")===0||u==="ч"){
-mins=n[0]*60;for(var b=0;b<=n[1];b++)used[i+b]=1;
-var j=i+n[1]+1;m2=numAt(tk,j);
-if(m2&&tk[j+m2[1]]&&lw(tk[j+m2[1]]).indexOf("мин")===0){mins+=m2[0];for(var c=0;c<=m2[1];c++)used[j+c]=1}
-break}}}
-if(!mins){var last=tk.length-1,nl=last>0?numAt(tk,last):null;if(nl&&nl[1]===1){mins=nl[0];used[last]=1}}
-var rest=tk.filter(function(_,k){return !used[k]});
-return {who:rest[0]||"",what:rest.slice(1).join(" "),min:mins}}
-function addEntry(who,what,m){
-var n=new Date(),date=$("date").value;
-data.push({id:Date.now(),date:date,time:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"),who:who.slice(0,80),what:what.slice(0,500),min:m});
-saveDay(date);render()}
-$("qadd").onclick=function(){
-var raw=$("q").value.trim(),msg=$("qmsg");
-if(!raw)return;
-var p=parseQ(raw);
-p.who=p.who.charAt(0).toUpperCase()+p.who.slice(1);
-if(p.who&&p.min>0&&p.min<1000){
-addEntry(p.who,p.what,p.min);$("q").value="";
-msg.textContent="Добавлено: "+p.who+" — "+(p.what||"обращение")+" — "+p.min+" мин"
-}else{
-$("who").value=p.who;$("what").value=p.what;dur=0;mark();$("min").value=p.min||"";
-msg.textContent="Не удалось определить "+(p.min?"фамилию":"минуты")+". Проверь поля ниже и нажми «Добавить»."}};
-var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(SR){
-var mic=$("mic"),rec=null;mic.hidden=false;
-mic.onclick=function(){
-if(rec){rec.stop();return}
-rec=new SR();rec.lang="ru-RU";rec.interimResults=false;
-rec.onresult=function(e){var t="";for(var k=0;k<e.results.length;k++)t+=e.results[k][0].transcript+" ";$("q").value=t.trim()};
-rec.onerror=function(e){$("qmsg").textContent="Микрофон недоступен ("+(e.error||"ошибка")+"). Используй микрофон на клавиатуре."};
-rec.onend=function(){rec=null;mic.classList.remove("on")};
-mic.classList.add("on");
-try{rec.start()}catch(x){rec=null;mic.classList.remove("on")}}}
+/* ---------- таймер ---------- */
+var TK="timer",TLS="trudozatraty-timer",rsT=null;
+function p2(n){return String(n).padStart(2,"0")}
+function tshow(){
+var el=$("tt");
+if(!tstart){el.textContent="⏱ 0:00";$("tgo").textContent="Старт";$("trs").hidden=true;return}
+var s=Math.max(0,Math.floor((Date.now()-tstart)/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;
+el.textContent="⏱ "+(h?h+":"+p2(m):m)+":"+p2(r);
+$("tgo").textContent="Стоп";$("trs").hidden=false}
+function tbegin(ts){tstart=ts;clearInterval(tick);if(ts){tick=setInterval(tshow,1000)}tshow()}
+function tsave(ts){
+if(cs){if(ts){cs.setItem(TK,String(ts),function(){})}else{cs.removeItem(TK,function(){})}}
+else{try{if(ts){localStorage.setItem(TLS,String(ts))}else{localStorage.removeItem(TLS)}}catch(e){}}}
+function tload(){
+if(cs){cs.getItem(TK,function(err,v){var n=parseInt(v,10);if(!err&&n>0)tbegin(n)})}
+else{try{var n=parseInt(localStorage.getItem(TLS),10);if(n>0)tbegin(n)}catch(e){}}}
+$("tgo").onclick=function(){
+if(!tstart){var ts=Date.now();tbegin(ts);tsave(ts);return}
+var mins=Math.max(1,Math.round((Date.now()-tstart)/60000));
+tbegin(0);tsave(0);
+dur=0;mark();$("min").value=mins;$("who").focus()};
+$("trs").onclick=function(){
+var b=$("trs");
+if(!rsT){b.textContent="Точно сбросить?";rsT=setTimeout(function(){rsT=null;b.textContent="Сброс"},3000);return}
+clearTimeout(rsT);rsT=null;b.textContent="Сброс";tbegin(0);tsave(0)};
 
 /* ---------- запуск ---------- */
 function start(){
-if(cs){loadCloud(render)}else{loadLocal();render()}}
+if(cs){loadCloud(render)}else{loadLocal();render()}
+tload()}
 start();
 document.addEventListener("visibilitychange",function(){
 if(cs&&!document.hidden&&pending===0&&Date.now()-lastLoad>30000){loadCloud(render)}});
